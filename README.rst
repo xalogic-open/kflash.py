@@ -40,14 +40,15 @@ This code is tested on Raspian Stretch (Full Version)
 UART speed of 1152000 (10X of 115200) has been tested to be reliable.
 If you ran into problems, lower the speed.
 
-The next step is important
----------
+The next step is important:
+
 In the menu Referrences -> Raspberry PI Configurations -> Interface
  - Serial Port:Enable
  - Serial Console:Disable
 
-```
->sudo python3 kflash.py -p /dev/ttyS0 -B xapiz xapiz3500_demo.kfpkg -b 1152000 -t
+.. code:: bash
+
+    sudo python3 kflash.py -p /dev/ttyS0 -B xapiz xapiz3500_demo.kfpkg -b 1152000 -t
 
 
 Attention
