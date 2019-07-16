@@ -16,6 +16,11 @@ import zipfile, tempfile
 import json
 import re
 import os
+try:
+    from gpiozero import LED
+except:
+    pass
+
 
 
 class KFlash:
@@ -51,6 +56,10 @@ class KFlash:
 
         ISP_FLASH_SECTOR_SIZE = 4096
         ISP_FLASH_DATA_FRAME_SIZE = ISP_FLASH_SECTOR_SIZE * 16
+
+        pi_k210_boot = LED(17)
+        pi_k210_reset = LED(27)
+
 
         def tuple2str(t):
             ret = ""
@@ -597,6 +606,10 @@ class KFlash:
                     # This is for CH340, contained dan, bit and kd233
                     baudrate_stage0 = int(baudrate * 38.4 / 38)
                     # CH340 can not use this method, test failed, take risks at your own risk
+                elif args.Board == "xapiz":
+                    KFlash.log(INFO_MSG,"XaLogic Raspberry PI Mode", BASH_TIPS['DEFAULT'])
+                    #baudrate_stage0 = int(baudrate * 38.4 / 38)
+                    baudrate_stage0 = int(baudrate)
                 else:
                     # This is for unknown board
                     KFlash.log(WARN_MSG,"Unknown mode", BASH_TIPS['DEFAULT'])
@@ -681,6 +694,29 @@ class KFlash:
 
                 #sys.stdout.write('\n')
                 return data
+
+            # XAPIZ3500 or other PI Hat programmed by PI
+            def reset_to_isp_xapiz(self):
+                print('Entering XAPIZ3500 ISP')
+                pi_k210_reset.off()
+                pi_k210_boot.off()
+                time.sleep(0.1)
+                pi_k210_reset.on()
+                pi_k210_boot.off()
+                time.sleep(0.1)
+                print('Entering XAPIZ3500 ISP : Done')
+            def reset_to_boot_xapiz(self):
+                print('Entering XAPIZ3500 BOOT')
+                pi_k210_reset.off()
+                pi_k210_boot.off()
+                time.sleep(0.1)
+                pi_k210_reset.off()
+                pi_k210_boot.on()
+                time.sleep(0.1)
+                pi_k210_reset.on()
+                pi_k210_boot.on()
+                #time.sleep(0.1)
+                print('Entering XAPIZ3500 BOOT : Done')
 
             # kd233 or open-ec or new cmsis-dap
             def reset_to_isp_kd233(self):
@@ -1096,6 +1132,26 @@ class KFlash:
                     self._kill_process = False
                     raise Exception("Cancel")
 
+        def open_terminal_xapiz():
+            import time
+            import serial
+            ser = serial.Serial(
+                #port='/dev/ttyS0',
+                port = args.port,
+                baudrate = 115200,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                bytesize=serial.EIGHTBITS,
+                timeout=0.5
+              )
+
+            while 1:
+                line=ser.readline()
+                if line:
+                     print(line.decode('utf-8'))
+
+            sys.exit(0)
+
         def open_terminal(reset):
             control_signal = '0' if reset else '1'
             control_signal_b = not reset
@@ -1106,7 +1162,7 @@ class KFlash:
             serial.tools.miniterm.main(default_port=_port, default_baudrate=115200, default_dtr=control_signal_b, default_rts=control_signal_b)
             sys.exit(0)
 
-        boards_choices = ["kd233", "dan", "bit", "bit_mic", "goE", "goD", "maixduino", "trainer"]
+        boards_choices = ["kd233", "dan", "bit", "bit_mic", "goE", "goD", "maixduino", "trainer", "xapiz"]
         if terminal:
             parser = argparse.ArgumentParser()
             parser.add_argument("-p", "--port", help="COM Port", default="DEFAULT")
@@ -1119,7 +1175,7 @@ class KFlash:
             parser.add_argument("-t", "--terminal", help="Start a terminal after finish (Python miniterm)", default=False, action="store_true")
             parser.add_argument("-n", "--noansi", help="Do not use ANSI colors, recommended in Windows CMD", default=False, action="store_true")
             parser.add_argument("-s", "--sram", help="Download firmware to SRAM and boot", default=False, action="store_true")
-            parser.add_argument("-B", "--Board",required=False, type=str, help="Select dev board, e.g. kd233, dan, bit, goD, goE or trainer")
+            parser.add_argument("-B", "--Board",required=False, type=str, help="Select dev board, e.g. kd233, dan, bit, goD, goE or trainer or xapiz")
             parser.add_argument("-S", "--Slow",required=False, help="Slow download mode", default=False)
             parser.add_argument("firmware", help="firmware bin path")
             args = parser.parse_args()
@@ -1240,7 +1296,16 @@ class KFlash:
                     err = (ERROR_MSG,"No vaild Kendryte K210 found in Auto Detect, Check Your Connection or Specify One by"+BASH_TIPS['GREEN']+'`-p '+('/dev/ttyUSB0', 'COM3')[sys.platform == 'win32']+'`',BASH_TIPS['DEFAULT'])
                     err = tuple2str(err)
                     raise_exception( Exception(err) )
-                if args.Board == "dan" or args.Board == "bit" or args.Board == "trainer":
+
+                if args.Board == "xapiz":
+                    try:
+                        KFlash.log('.', end='')
+                        self.loader.reset_to_isp_xapiz()
+                        self.loader.greeting()
+                        break
+                    except TimeoutError:
+                        pass
+                elif args.Board == "dan" or args.Board == "bit" or args.Board == "trainer":
                     try:
                         KFlash.log('.', end='')
                         self.loader.reset_to_isp_dan()
@@ -1406,7 +1471,9 @@ class KFlash:
                 self.loader.flash_firmware(firmware_bin.read())
 
         # 3. boot
-        if args.Board == "dan" or args.Board == "bit" or args.Board == "trainer":
+        if args.Board == "xapiz":
+            self.loader.reset_to_boot_xapiz()
+        elif args.Board == "dan" or args.Board == "bit" or args.Board == "trainer":
             self.loader.reset_to_boot_dan()
         elif args.Board == "kd233":
             self.loader.reset_to_boot_kd233()
@@ -1424,7 +1491,10 @@ class KFlash:
             pass
 
         if(args.terminal == True):
-            open_terminal(True)
+            if args.Board == "xapiz":
+                open_terminal_xapiz()
+            else:
+                open_terminal(True)
 
     def kill(self):
         if self.loader:
