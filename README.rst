@@ -30,8 +30,25 @@ Usage
     -s, --sram            Download firmware to SRAM and boot
     -B BOARD, --Board BOARD
                             Select dev board, e.g. kd233, dan, bit, goD, goE or
-                            trainer
+                            trainer xapiz
     -S SLOW, --Slow SLOW  Slow download mode
+
+
+Attention (Raspberry PI : XAPIZ)
+---------
+This code is tested on Raspian Stretch (Full Version)
+UART speed of 1152000 (10X of 115200) has been tested to be reliable.
+If you ran into problems, lower the speed.
+
+The next step is important
+---------
+In the menu Referrences -> Raspberry PI Configurations -> Interface
+ - Serial Port:Enable
+ - Serial Console:Disable
+
+```
+>sudo python3 kflash.py -p /dev/ttyS0 -B xapiz xapiz3500_demo.kfpkg -b 1152000 -t
+
 
 Attention
 ---------
